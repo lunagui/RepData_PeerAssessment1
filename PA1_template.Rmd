@@ -1,25 +1,116 @@
 ---
 title: "Reproducible Research: Peer Assessment 1"
+author: "Luna Gui"
+date: "12 October 2014"
 output: 
   html_document:
     keep_md: true
 ---
 
-
 ## Loading and preprocessing the data
 
-
+```{r readdata}
+Activity <- read.csv(unzip("activity.zip"))
+```
 
 ## What is mean total number of steps taken per day?
 
+**1. Make a histogram of the total number of steps taken each day.**
+```{r summary}
+sumperday <- tapply(Activity$steps, Activity$date, sum)
+hist(sumperday, col = "lightblue", main = "Histogram of the total number of steps taken each day")
+```
 
+**2. Calculate and report the mean and median total number of steps taken per day.**
+```{r showmean, results= "asis"}
+meanperday <- tapply(Activity$steps, Activity$date, mean)
+medianperday <- tapply(Activity$steps, Activity$date, median)
+## Make a new data cbind with mean and median value
+Meanandmedian <- data.frame(cbind(unique(Activity$date), meanperday, medianperday))
+library(xtable)
+Meanandmedian <- Meanandmedian[,2:3]
+print(xtable(Meanandmedian), type = "html")
+```
 
 ## What is the average daily activity pattern?
 
+**1. Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis).**
+```{r averageofinterval}
+library(ggplot2)
+Temp <- subset(Activity, Activity$date == "2012-10-01")## just for convenience
+Activity$interval <- factor(Activity$interval, levels = Temp$interval)
+meanofinterval <- tapply(Activity$steps, Activity$interval, mean, na.rm = TRUE)
+## make a new data for plot
+Average <- data.frame(interval = Temp$interval, meanofinterval)
+g <- ggplot(Average, aes(interval, meanofinterval, group= 1))
+g + geom_line() + labs(x = "5-minute interval ", y = "average steps", title = "Average steps of the 5-minute interval")
+```
 
+**2. Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?**
+
+```{r maxstep}
+Maxstep <- subset(Average, Average$meanofinterval == max(Average$meanofinterval))
+```
+
+On average across all the days in the dataset, **interval `r Maxstep$interval`** contains the maximum number of steps.
 
 ## Imputing missing values
 
+**1. Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)**
 
+```{r fillmissing}
+missing <- sum(is.na(Activity))
+percent <- missing/dim(Activity)[1] * 100
+```
+There are **`r missing`** row missing values in dataset, about **`r percent`%** of all.
+
+**2. Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.**  
+We found that all missing value is in steps. we can replace it by 0, means no stpe on that interval.
+
+**3. Create a new dataset that is equal to the original dataset but with the missing data filled in.**
+
+```{r newdata}
+Newdata <- Activity
+Newdata$steps[is.na(Newdata$steps)] <- 0
+```
+
+**4. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?**  
+
+After we fill missing data, total number of steps taken each day looks differ frome the previous plot. **Missing values can have a surprising impact on the way that data is dealt with SUM.** we should watch out that.  
+
+```{r filledsummary}
+newsumperday <- tapply(Newdata$steps, Newdata$date, sum)
+par(mfrow = c(1,2))
+hist(sumperday, col = "lightblue")
+hist(newsumperday, col = "lightblue")
+```
+
+
+But mean and median looks have no difference frome previous table when we trate missing data as 0.  
+```{r showfilledmean, results= "asis"}
+newmeanperday <- tapply(Newdata$steps, Newdata$date, mean)
+newmedianperday <- tapply(Newdata$steps, Newdata$date, median)
+NewMeanandmedian <- data.frame(cbind(unique(Newdata$date),meanperday, newmeanperday, medianperday, newmedianperday))
+NewMeanandmedian <- NewMeanandmedian[,2:5]
+print(xtable(NewMeanandmedian), type = "html")
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+```{r wday}
+library(lubridate)
+weekday <- wday(ymd(Newdata$date))
+wday <- ifelse(weekday==7 | weekday ==1, "weekend", "weekday")
+Newdata <- data.frame(Newdata, wday)
+## Split dataset and calculate the mean based on wday
+Weekendset <- subset(Newdata, Newdata$wday == "weekend")
+Weekdayset <- subset(Newdata, Newdata$wday == "weekday")
+meanofweekend <- tapply(Weekendset$steps, Weekendset$interval, mean)
+meanofweekday <- tapply(Weekdayset$steps, Weekdayset$interval, mean)
+## Make a new data for plot
+Averageofweekstep1 <- data.frame(interval = Temp$interval, mean = meanofweekend,wday = "weekend")
+Averageofweekstep2 <- data.frame(interval = Temp$interval, mean = meanofweekday,wday = "weekday")
+Averageofweekstep <- rbind(Averageofweekstep1,Averageofweekstep2)
+g2 <- ggplot(Averageofweekstep, aes(interval, mean))
+g2 + geom_line() + facet_grid(wday~.)+labs(x = "5-minute interval ", y = "average steps", title = "Average steps of weekend vs. weekday")
+```
